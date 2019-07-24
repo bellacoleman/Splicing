@@ -1,0 +1,43 @@
+import pandas as pd
+from Bio import SeqIO
+
+columns = ['Protein','Exon', 'Sequence', 'Start', 'Stop']
+proteins = []
+seqs = []
+starts = []
+stops = []
+exon_ids = []
+lengths = []
+iters = 0
+
+
+for record in SeqIO.parse('C:\\Users\Bella Coleman\PycharmProjects\Splicing\Homo_sapiens_EGFR_201_sequence (2).fa', 'fasta'):
+    
+    
+    header = record.description.split()
+    protein = record.id
+    seq = str(record.seq)
+    exon_id  = header[1]
+    exon_ids = exon_ids + [exon_id]
+    proteins = proteins + [protein]
+    length = len(seq)
+    if iters == 0:
+        start = 1
+        spot = seq.find('ATG')
+        length = len(seq) - spot
+        seq = seq[spot:-1]
+    else: 
+        start = stops[iters-1] + 1
+        length = len(seq)
+        seq = str(record.seq)
+    starts = starts + [start]
+    stop = start + length - 1
+    stops = stops + [stop]
+    seqs = seqs + [seq]
+    iters = iters + 1
+    print(length)
+    lengths = lengths + [length]
+   
+   df = pd.DataFrame(list(zip(proteins, exon_ids, seqs, starts, stops)), 
+               columns = ['Protein','Exon', 'Sequence', 'Start', 'Stop'])
+df
