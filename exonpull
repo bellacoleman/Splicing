@@ -3,11 +3,11 @@ from Bio import SeqIO
 import requests
 
 
-def get_seqs(file1, file2):
+def get_seqs(file):
     
-    # reads file1 to get all gene IDs, transcript IDs, exon IDs, and exon ranks
+    # reads file to get all gene IDs, transcript IDs, exon IDs, and exon ranks
     
-    all_ids_w_ranks = pd.read_csv(file1, compression = 'gzip')
+    all_ids_w_ranks = pd.read_csv(file, compression = 'gzip')
     
     # takes first df (above) and breaks up exon IDs into a list that will be used 
     # to retrieve all exon seqs from ensembl server directly
@@ -15,12 +15,16 @@ def get_seqs(file1, file2):
     # even when you request it to be emailed)
     
     exon_id_df = pd.DataFrame(all_ids_w_ranks['Exon stable ID'].unique())
- #   exon_id_df['Sequence'] = 'NA'
     exon_id_df.columns = ['Exon stable ID' if x==0 else x for x in exon_id_df.columns]
     exon_ids = exon_id_df['Exon stable ID'].tolist()
     id_chunks = [exon_ids[x:x+50] for x in range(0, len(exon_ids), 50)]
     
     # gets all the exon seqs from ensembl's data 
+    # NOTE: this takes LONG. And sometimes biomart's server crashes and we can't get 
+    # all of the exons to load so we have to start over and say screw you to biomart. 
+    # But usually it works fine, just takes ~ 4.5 hours.
+    # to speed it up you can increase the size of the id_chunks but that's bold
+    # may the odds be ever in your favor tho. you do you.
 
     dfs = []
     i = 0
@@ -42,34 +46,17 @@ def get_seqs(file1, file2):
         dfs.append(pd.DataFrame(decoded))
         i = i + 1
         
+    # saves all these retrieved sequences as a new df with biomart's designated headings
+    # which happen to be different than biomart's designated headings for their fasta files
+    # idk man the common theme is that they don't really have their stuff together
+        
     full_seqs = pd.concat(dfs).reset_index(drop= True)        
 
-
-    
-#     exon_dict = {'Exon stable ID': [], 'Exon Sequence': []}
-
-#     for record in SeqIO.parse(file2, 'fasta'):
-
-#         exon_dict['Exon stable ID'].append(record.id)
-#         exon_dict['Exon Sequence'].append(record.seq)
-    
-#     prelim_exons = pd.DataFrame(exon_dict)
-    
-#     transcript_ids = all_ids_w_ranks.groupby('Transcript stable ID').size().reset_index()
-#     transcript_ids.rename(columns = {0:'Number of Exons'}, inplace = True )
-#     rearranged_all_ids = pd.merge(all_ids_w_ranks, transcript_ids, on = 'Transcript stable ID', how = 'left')
-    
-#    all_data_flawed = pd.merge(rearranged_all_ids, prelim_exons, on = "Exon stable ID", how = 'left')
-    
-
-
-
-    
-#    all_data_flawed['Exon stable ID']= all_data_flawed['Exon stable ID'].astype(str)
-
+    # makes sure the ids are both in str format and then merges them into the final dataframe
+    # so we finally have everything we need!!!
     
     full_seqs['id'] = full_seqs['id'].astype(str)
-    
+    all_ids_w_ranks['Exon stable ID'] = all_ids_w_ranks['Exon stable ID'].astype(str) 
     trans_seq = pd.merge(all_ids_w_ranks, full_seqs, left_on = 'Exon stable ID', right_on = 'id', how = 'left')
     
     return trans_seq
