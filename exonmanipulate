@@ -1,0 +1,70 @@
+import pandas as pd
+import re
+import exonpull
+
+
+file = input('Enter file name: ')
+trans_seq = exonpull.get_seqs(file)
+
+
+# getting first exon in each transcript cut down so it starts with "ATG"
+# this gets rid of any 5' UTR
+
+
+def modify_first(row):
+    import re
+    if row['Exon rank in transcript'] == 1: 
+        sequ = row['seq']   # may have to change name here if it is not seq instead
+        if type(sequ) is str:
+            match = re.search('ATG', sequ)
+            if match:
+                spot = match.span()[0]
+                mod1_seq = row['seq'][spot:]
+            else:
+                mod1_seq = 'error: no start codon matched'
+        else:
+            mod1_seq = 'error: not a string'
+        
+    else:
+        mod1_seq = row['seq']
+    
+    return mod1_seq
+
+trans_seq['Modified1 Sequence'] = trans_seq.apply(modify_first, axis = 1)
+
+# makes new column called Mod1 Size which is the length of the sequence with the 5' end cut off
+
+def mod1size(row):
+    seq = row['Modified1 Sequence']
+    if type(seq) is str:   
+        size = len(seq)
+    else:
+        size = 'error: not a string'
+    
+    return size
+
+trans_seq['Mod1 Size'] = trans_seq.apply(mod1size, axis = 1)
+
+# makes new df called df_organized which just has the transcript ID and 5' modified sequence
+
+transgroup = trans_seq.groupby('Transcript stable ID')
+trans_seq['Total Size'] = transgroup.sum('Mod1 Size')
+trans_seq = trans_seq.sort_values(by = 'Exon rank in transcript')
+df_organized = trans_seq.groupby('Transcript stable ID')['Modified1 Sequence'].apply(''.join)
+df_organized = pd.DataFrame(df_organized)
+
+# cutting off 3' UTR
+
+def end_cut(row):
+    
+    sequence = row['Modified1 Sequence']
+    new = [sequence[i:i+3] for i in range(0, len(sequence), 3)]
+    for item in new:
+        if item == 'TAG' or 'TAA' or 'TGA':
+            spot = new.index(item)
+            str_spot = spot * 3
+    modseq = ''.join(new)[:str_spot]
+    
+    return modseq
+ 
+df_organized['Transcript Sequence'] = df_organized.apply(end_cut, axis = 1) 
